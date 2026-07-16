@@ -7,11 +7,11 @@ teum stores time entries as plain text files. You can read them with `cat`, sear
 ## Quick start
 
 ```bash
-cargo install teum
+cargo install --git https://github.com/yy/teum --tag v0.1.0
 teum init
 ```
 
-To install a source checkout instead, run `cargo install --path .` from its root.
+To install a local source checkout instead, run `cargo install --path .` from its root.
 
 Edit `~/.config/teum/config.toml` to set up presets:
 
