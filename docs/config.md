@@ -44,6 +44,17 @@ auto_commit = false
 
 Default: `false`
 
+### `auto_push`
+
+Whether `teum sync` pushes after committing and rebasing. Set this to `false`
+when you want synchronization to stop after the local commit and pull.
+
+```toml
+auto_push = true
+```
+
+Default: `true`
+
 ## Presets
 
 Presets map short names to a project and optional tags. They save typing on the most common `teum start` invocations.
@@ -102,6 +113,7 @@ teum summary week --group focus
 data_dir = "~/.local/share/teum"
 sync = "git"
 auto_commit = true
+auto_push = true
 
 [presets]
 focus = { project = "focus" }

@@ -56,7 +56,8 @@ Same format as start time. If the interval is still running (open), the end time
 2030-01-07 15:15 -       | @focus #planning | roadmap
 ```
 
-The parser treats any non-`HH:MM` content after ` - ` as an open interval.
+Only an omitted end time creates an open interval. Any other non-`HH:MM`
+content is invalid and produces an error.
 
 #### Cross-midnight intervals
 
@@ -97,6 +98,8 @@ Invalid: `@Focus`, `#project planning`, `@`
 
 Valid: `!1`, `!3`, `!5`
 Invalid: `!0`, `!6`, `!high`, `!`
+
+At most one energy token is allowed.
 
 #### Description
 

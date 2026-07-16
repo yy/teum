@@ -6,7 +6,7 @@ use crate::format;
 use crate::period;
 
 pub fn run(config: &Config, period_str: &str) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
     let today = Local::now().naive_local().date();
     let range = period::resolve(period_str, today)?;
 
@@ -39,11 +39,16 @@ pub fn run(config: &Config, period_str: &str) -> Result<(), String> {
             meta.push_str(&format!(" !{e}"));
         }
 
-        let dur = iv.duration().unwrap_or_else(|| iv.duration_until(now));
-        let dur_str = format::duration_str(dur);
-        let running = if iv.is_open() { " (running)" } else { "" };
-
-        total_minutes += dur.num_minutes();
+        let (dur_str, running) = match iv.report_duration(today, now) {
+            Some(dur) => {
+                total_minutes += dur.num_minutes();
+                (
+                    format::duration_str(dur),
+                    if iv.is_open() { " (running)" } else { "" },
+                )
+            }
+            None => ("--".into(), " (stale; not counted)"),
+        };
 
         let desc = if iv.description.is_empty() {
             String::new()

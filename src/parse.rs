@@ -30,19 +30,18 @@ pub fn parse_start_args(
         if in_desc {
             desc_parts.push(arg.as_str());
         } else if let Some(p) = arg.strip_prefix('@') {
-            if p.is_empty() {
-                return Err("empty project name (use @name)".into());
-            }
+            crate::interval::validate_name(p, "project")?;
             if project.is_some() {
                 return Err("multiple @projects not allowed".into());
             }
             project = Some(p.to_string());
         } else if let Some(t) = arg.strip_prefix('#') {
-            if t.is_empty() {
-                return Err("empty tag (use #name)".into());
-            }
+            crate::interval::validate_name(t, "tag")?;
             tags.push(t.to_string());
         } else if let Some(e) = arg.strip_prefix('!') {
+            if energy.is_some() {
+                return Err("multiple energy levels not allowed".into());
+            }
             let level: u8 = e
                 .parse()
                 .map_err(|_| format!("invalid energy level '!{e}' (use 1-5)"))?;
@@ -61,20 +60,43 @@ pub fn parse_start_args(
 }
 
 /// Parse energy and description from args (used with presets where project/tags come from config).
-pub fn parse_energy_and_desc(args: &[String]) -> (Option<u8>, String) {
+pub fn parse_energy_and_desc(args: &[String]) -> Result<(Option<u8>, String), String> {
     let mut energy = None;
     let mut desc_parts = Vec::new();
 
     for arg in args {
-        if let Some(e) = arg.strip_prefix('!')
-            && let Ok(level) = e.parse::<u8>()
-            && (1..=5).contains(&level)
-        {
+        if let Some(e) = arg.strip_prefix('!') {
+            if energy.is_some() {
+                return Err("multiple energy levels not allowed".into());
+            }
+            let level: u8 = e
+                .parse()
+                .map_err(|_| format!("invalid energy level '!{e}' (use 1-5)"))?;
+            if !(1..=5).contains(&level) {
+                return Err(format!("energy level !{level} out of range (use 1-5)"));
+            }
             energy = Some(level);
             continue;
         }
         desc_parts.push(arg.as_str());
     }
 
-    (energy, desc_parts.join(" "))
+    Ok((energy, desc_parts.join(" ")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preset_args_reject_invalid_and_duplicate_energy() {
+        assert!(parse_energy_and_desc(&["!6".into()]).is_err());
+        assert!(parse_energy_and_desc(&["!3".into(), "!4".into()]).is_err());
+    }
+
+    #[test]
+    fn explicit_args_reject_invalid_names() {
+        assert!(parse_start_args(&["@Focus".into()]).is_err());
+        assert!(parse_start_args(&["@focus".into(), "#code_review".into()]).is_err());
+    }
 }

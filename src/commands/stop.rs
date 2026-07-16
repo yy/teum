@@ -12,18 +12,20 @@ pub fn run(config: &Config, at: Option<&str>, energy: Option<u8>) -> Result<(), 
     {
         return Err(format!("energy level {e} out of range (use 1-5)"));
     }
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
+    let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let now = Local::now().naive_local();
     let date = now.date();
     let time = parse_time_or(at, now.time())?;
 
-    let (_open, path) = datafile::find_open(&data_dir, date)?.ok_or("nothing is running")?;
+    let (open, path) = datafile::find_open(&data_dir, date)?.ok_or("nothing is running")?;
+    super::validate_close_time(&open, date, time)?;
 
     let closed = datafile::close_open(&path, time, energy)?.ok_or("failed to close interval")?;
     state::warn_on_err(state::write(config, None));
 
-    // Warn if the timer crossed midnight
-    if time < closed.start {
+    // Note if the timer crossed midnight
+    if closed.date < date {
         eprintln!(
             "note: timer crossed midnight (started {} on {})",
             closed.start.format("%H:%M"),
@@ -52,6 +54,8 @@ pub fn run(config: &Config, at: Option<&str>, energy: Option<u8>) -> Result<(), 
         time.format("%H:%M"),
         format::duration_str(dur)
     );
+
+    super::sync::auto_commit(config)?;
 
     Ok(())
 }

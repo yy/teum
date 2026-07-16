@@ -117,7 +117,13 @@ enum Command {
 
 fn main() {
     let cli = Cli::parse();
-    let config = Config::load();
+    let config = match Config::load() {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    };
 
     let result = match cli.command {
         Command::Start { preset, at, args } => {

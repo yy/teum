@@ -5,7 +5,8 @@ use crate::datafile;
 use crate::state;
 
 pub fn run(config: &Config) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
+    let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let now = Local::now().naive_local();
     let date = now.date();
 

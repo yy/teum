@@ -33,6 +33,7 @@ Keep the data directory as a git repository. This gives you version history and 
 # ~/.config/teum/config.toml
 sync = "git"
 auto_commit = false
+auto_push = true
 ```
 
 Setup:
@@ -52,6 +53,14 @@ The `teum sync` command runs:
 4. `git push`
 
 If `auto_commit = true`, `teum stop` automatically commits (but does not push). Run `teum sync` when you want to push.
+
+`auto_push` defaults to `true`. Set it to `false` if `teum sync` should commit
+and pull without pushing. Any failed commit, pull, or push makes `teum sync`
+exit nonzero so scripts can detect that synchronization did not finish.
+
+teum's persistent `*.lock` files coordinate local writers. `teum init` adds
+them to the data repository's `.gitignore`, and `teum sync` excludes them from
+staging even in repositories created by hand.
 
 ### Merge conflicts
 
@@ -88,7 +97,7 @@ Create a "Start Timer" shortcut:
 1. **Get Current Date** > format as `yyyy-MM-dd HH:mm`
 2. **Choose from Menu**: Focus, Support, Side, Personal
 3. **Ask for Input**: activity description
-4. Construct the line: `{date} -       | @{project} #activity | {description}`
+4. Construct the line: `{date} {time} -       | @{project} #activity | {description}`
 5. **Append to File**: current week's `.txt` in iCloud Drive
 
 A "Stop Timer" shortcut:

@@ -22,7 +22,7 @@ Cloud time trackers work until they don't:
 - You can't work offline or on a plane
 - Your data lives on someone else's server
 
-teum is 1600 lines of Rust that writes text files to a folder. No network, no account.
+teum is a small Rust program that writes text files to a folder. No network, no account.
 
 ## Why not timewarrior
 

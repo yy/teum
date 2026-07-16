@@ -109,10 +109,8 @@ pub fn aggregate(
     let mut weeks: BTreeMap<(i32, u32), WeeklyStats> = BTreeMap::new();
 
     for iv in intervals {
-        let dur = match iv.duration() {
-            Some(d) => d,
-            None if iv.date == today => iv.duration_until(now),
-            None => continue, // stale open timer on a past day — skip
+        let Some(dur) = iv.report_duration(today, now) else {
+            continue; // stale open timer on a past day — skip
         };
         let m = dur.num_minutes();
         if m <= 0 {

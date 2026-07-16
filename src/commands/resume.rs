@@ -7,14 +7,15 @@ use crate::parse::parse_time_or;
 use crate::state;
 
 pub fn run(config: &Config, at: Option<&str>) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
+    let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let now = Local::now().naive_local();
     let date = now.date();
     let time = parse_time_or(at, now.time())?;
 
     // Auto-stop if something is running
     if let Some((open, path)) = datafile::find_open(&data_dir, date)? {
-        state::warn_if_stale(&open, date);
+        super::validate_close_time(&open, date, time)?;
         datafile::close_open(&path, time, None)?;
         eprintln!("(auto-stopped previous timer)");
     }

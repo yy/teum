@@ -7,7 +7,7 @@ use crate::format;
 use crate::period;
 
 pub fn run(config: &Config, period_str: &str, group: Option<&str>) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
     let today = Local::now().naive_local().date();
     let range = period::resolve(period_str, today)?;
 
@@ -41,7 +41,13 @@ pub fn run(config: &Config, period_str: &str, group: Option<&str>) -> Result<(),
         {
             continue;
         }
-        let dur = iv.duration().unwrap_or_else(|| iv.duration_until(now));
+        let Some(dur) = iv.report_duration(today, now) else {
+            eprintln!(
+                "warning: unclosed timer {} {} | @{} — skipped (close it to count)",
+                iv.date, iv.start, iv.project
+            );
+            continue;
+        };
         let entry = by_project.entry(iv.project.clone()).or_default();
         entry.0 += dur.num_minutes();
         if let Some(e) = iv.energy {

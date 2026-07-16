@@ -7,9 +7,11 @@ teum stores time entries as plain text files. You can read them with `cat`, sear
 ## Quick start
 
 ```bash
-cargo install --path .
+cargo install teum
 teum init
 ```
+
+To install a source checkout instead, run `cargo install --path .` from its root.
 
 Edit `~/.config/teum/config.toml` to set up presets:
 
@@ -25,8 +27,8 @@ Start tracking:
 
 ```bash
 teum start -p build "prototype"          # use a preset
-teum start @focus #planning roadmap       # or spell it out
-teum start @focus #build '!4' prototype   # with energy level
+teum start '@focus' '#planning' roadmap       # or spell it out
+teum start '@focus' '#build' '!4' prototype   # with energy level
 teum status                               # what's running?
 teum stop                                 # done
 teum stop -e 4                            # done, with energy level
@@ -216,6 +218,9 @@ sync = "none"
 
 # Auto-commit on stop (requires sync = "git")
 auto_commit = false
+
+# Push when running `teum sync` (default: true)
+auto_push = true
 
 [presets]
 focus = { project = "focus" }

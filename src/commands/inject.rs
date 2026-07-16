@@ -14,7 +14,8 @@ pub fn run(
     cont: bool,
     args: &[String],
 ) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
+    let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let now = Local::now().naive_local();
     let date = now.date();
     let now_time = truncate_to_minutes(now.time());
@@ -39,7 +40,7 @@ pub fn run(
     // Resolve project, tags, energy, description
     let (project, tags, energy, description) = if let Some(preset_name) = preset {
         let p = config.resolve_preset(preset_name)?;
-        let (energy, desc) = parse_energy_and_desc(args);
+        let (energy, desc) = parse_energy_and_desc(args)?;
         (p.project.clone(), p.tags.clone(), energy, desc)
     } else {
         parse_start_args(args)?
@@ -48,7 +49,8 @@ pub fn run(
     // Trim the previous entry:
     // - If there's a running timer, close it at start_time
     // - Otherwise, if the last closed entry overlaps, trim its end
-    if let Some((_open, path)) = datafile::find_open(&data_dir, date)? {
+    if let Some((open, path)) = datafile::find_open(&data_dir, date)? {
+        super::validate_close_time(&open, date, start_time)?;
         datafile::close_open(&path, start_time, None)?;
         eprintln!("(trimmed running timer to {})", start_time.format("%H:%M"));
     } else if let Some(last) = datafile::find_last_closed(&data_dir, date)?
@@ -112,37 +114,35 @@ pub fn run(
 
 fn parse_duration(s: &str) -> Result<Duration, String> {
     let s = s.trim().to_lowercase();
-
-    let mut hours: i64 = 0;
-    let mut minutes: i64 = 0;
-
-    if let Some(h_pos) = s.find('h') {
-        hours = s[..h_pos]
+    let (hours, minutes) = if let Some((hours, rest)) = s.split_once('h') {
+        let hours: i64 = hours
             .parse()
             .map_err(|_| format!("invalid duration '{s}'"))?;
-        let rest = &s[h_pos + 1..];
-        if !rest.is_empty() {
-            if let Some(m_pos) = rest.find('m') {
-                minutes = rest[..m_pos]
-                    .parse()
-                    .map_err(|_| format!("invalid duration '{s}'"))?;
-            } else {
-                return Err(format!(
-                    "invalid duration '{s}' — expected format like 1h30m"
-                ));
-            }
-        }
-    } else if let Some(m_pos) = s.find('m') {
-        minutes = s[..m_pos]
-            .parse()
-            .map_err(|_| format!("invalid duration '{s}'"))?;
+        let minutes = if rest.is_empty() {
+            0
+        } else {
+            let minutes = rest
+                .strip_suffix('m')
+                .ok_or_else(|| format!("invalid duration '{s}' — expected format like 1h30m"))?;
+            minutes
+                .parse()
+                .map_err(|_| format!("invalid duration '{s}'"))?
+        };
+        (hours, minutes)
     } else {
-        return Err(format!(
-            "invalid duration '{s}' — use format like 30m or 1h30m"
-        ));
-    }
+        let minutes = s
+            .strip_suffix('m')
+            .ok_or_else(|| format!("invalid duration '{s}' — use format like 30m or 1h30m"))?;
+        let minutes = minutes
+            .parse()
+            .map_err(|_| format!("invalid duration '{s}'"))?;
+        (0, minutes)
+    };
 
-    let total = hours * 60 + minutes;
+    let total = hours
+        .checked_mul(60)
+        .and_then(|hours| hours.checked_add(minutes))
+        .ok_or("duration is too large")?;
     if total <= 0 {
         return Err("duration must be positive".into());
     }
@@ -178,5 +178,7 @@ mod tests {
         assert!(parse_duration("abc").is_err());
         assert!(parse_duration("0m").is_err());
         assert!(parse_duration("h30m").is_err());
+        assert!(parse_duration("30mjunk").is_err());
+        assert!(parse_duration("1h30mgarbage").is_err());
     }
 }

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 pub struct Config {
     pub data_dir: Option<String>,
     pub sync: Option<String>,
-    #[serde(alias = "auto_commit")]
+    pub auto_commit: Option<bool>,
     pub auto_push: Option<bool>,
     #[serde(default)]
     pub presets: HashMap<String, Preset>,
@@ -22,24 +22,23 @@ pub struct Preset {
 }
 
 impl Config {
-    pub fn load() -> Config {
-        let path = config_path();
+    pub fn load() -> Result<Config, String> {
+        let path = config_path()?;
         if path.exists() {
-            match std::fs::read_to_string(&path) {
-                Ok(contents) => match toml::from_str(&contents) {
-                    Ok(config) => return config,
-                    Err(e) => eprintln!("warning: failed to parse config: {e}"),
-                },
-                Err(e) => eprintln!("warning: failed to read config: {e}"),
-            }
+            let contents = std::fs::read_to_string(&path)
+                .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
+            let config: Config = toml::from_str(&contents)
+                .map_err(|e| format!("failed to parse {}: {e}", path.display()))?;
+            config.validate()?;
+            return Ok(config);
         }
-        Config::default()
+        Ok(Config::default())
     }
 
-    pub fn data_dir(&self) -> PathBuf {
+    pub fn data_dir(&self) -> Result<PathBuf, String> {
         if let Some(ref dir) = self.data_dir {
-            let expanded = shellexpand(dir);
-            PathBuf::from(expanded)
+            let expanded = shellexpand(dir)?;
+            Ok(PathBuf::from(expanded))
         } else {
             default_data_dir()
         }
@@ -50,14 +49,14 @@ impl Config {
     /// Lives next to the config (not in `data_dir`, which may be a synced
     /// folder like iCloud) so it stays local to this machine — a running
     /// timer is a per-machine fact, and `dial` reads it here.
-    pub fn state_path(&self) -> PathBuf {
-        config_dir().join("current.json")
+    pub fn state_path(&self) -> Result<PathBuf, String> {
+        Ok(config_dir()?.join("current.json"))
     }
 
     /// Default output path for `teum report --html` / `--open` when none is
     /// given. Machine-local, next to the config (not in a synced `data_dir`).
-    pub fn report_path(&self) -> PathBuf {
-        config_dir().join("report.html")
+    pub fn report_path(&self) -> Result<PathBuf, String> {
+        Ok(config_dir()?.join("report.html"))
     }
 
     pub fn resolve_preset(&self, name: &str) -> Result<&Preset, String> {
@@ -84,42 +83,58 @@ impl Config {
             }
         }
     }
-}
 
-pub fn config_dir() -> PathBuf {
-    let base = std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs::home_dir()
-                .expect("HOME directory not found")
-                .join(".config")
-        });
-    base.join("teum")
-}
-
-pub fn config_path() -> PathBuf {
-    config_dir().join("config.toml")
-}
-
-pub fn default_data_dir() -> PathBuf {
-    let base = std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            dirs::home_dir()
-                .expect("HOME directory not found")
-                .join(".local")
-                .join("share")
-        });
-    base.join("teum")
-}
-
-fn shellexpand(s: &str) -> String {
-    if let Some(rest) = s.strip_prefix("~/")
-        && let Some(home) = dirs::home_dir()
-    {
-        return home.join(rest).to_string_lossy().into_owned();
+    fn validate(&self) -> Result<(), String> {
+        if let Some(sync) = self.sync.as_deref()
+            && !matches!(sync, "none" | "git")
+        {
+            return Err(format!(
+                "invalid sync method '{sync}' (use 'none' or 'git')"
+            ));
+        }
+        for (name, preset) in &self.presets {
+            crate::interval::validate_name(&preset.project, "project")
+                .map_err(|e| format!("preset '{name}': {e}"))?;
+            for tag in &preset.tags {
+                crate::interval::validate_name(tag, "tag")
+                    .map_err(|e| format!("preset '{name}': {e}"))?;
+            }
+        }
+        Ok(())
     }
-    s.to_string()
+}
+
+pub fn config_dir() -> Result<PathBuf, String> {
+    let base = match std::env::var("XDG_CONFIG_HOME") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => home_dir()?.join(".config"),
+    };
+    Ok(base.join("teum"))
+}
+
+pub fn config_path() -> Result<PathBuf, String> {
+    Ok(config_dir()?.join("config.toml"))
+}
+
+pub fn default_data_dir() -> Result<PathBuf, String> {
+    let base = match std::env::var("XDG_DATA_HOME") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => home_dir()?.join(".local").join("share"),
+    };
+    Ok(base.join("teum"))
+}
+
+fn shellexpand(s: &str) -> Result<String, String> {
+    if let Some(rest) = s.strip_prefix("~/") {
+        return Ok(home_dir()?.join(rest).to_string_lossy().into_owned());
+    }
+    Ok(s.to_string())
+}
+
+fn home_dir() -> Result<PathBuf, String> {
+    dirs::home_dir().ok_or_else(|| {
+        "home directory is unavailable; set XDG_CONFIG_HOME and XDG_DATA_HOME explicitly".into()
+    })
 }
 
 pub fn write_default_config(path: &Path) -> Result<(), String> {
@@ -128,7 +143,8 @@ pub fn write_default_config(path: &Path) -> Result<(), String> {
 
 # Sync method: "git" or "none" (iCloud users just point data_dir to iCloud)
 # sync = "none"
-# auto_push = false
+# auto_commit = false
+# auto_push = true
 
 [presets]
 # dev = { project = "work", tags = ["coding"] }
@@ -147,7 +163,7 @@ pub fn write_default_config(path: &Path) -> Result<(), String> {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create config directory: {e}"))?;
     }
-    std::fs::write(path, content).map_err(|e| format!("failed to write config: {e}"))
+    crate::fsutil::atomic_write(path, content.as_bytes())
 }
 
 #[cfg(test)]
@@ -159,6 +175,8 @@ mod tests {
         let toml_str = r#"
 data_dir = "~/my-data/teum"
 sync = "git"
+auto_commit = true
+auto_push = false
 
 [presets]
 dev = { project = "work", tags = ["coding"] }
@@ -170,6 +188,8 @@ billable = ["work", "consulting"]
         let config: Config = toml::from_str(toml_str).unwrap();
         assert_eq!(config.data_dir, Some("~/my-data/teum".into()));
         assert_eq!(config.sync, Some("git".into()));
+        assert_eq!(config.auto_commit, Some(true));
+        assert_eq!(config.auto_push, Some(false));
         assert_eq!(config.presets.len(), 2);
         assert_eq!(config.presets["dev"].project, "work");
         assert_eq!(config.presets["dev"].tags, vec!["coding"]);
@@ -207,5 +227,20 @@ design = { project = "work", tags = ["design"] }
         );
         // No match
         assert!(config.resolve_preset("nonexistent").is_err());
+    }
+
+    #[test]
+    fn validation_rejects_unknown_sync_and_invalid_preset_names() {
+        let config: Config = toml::from_str("sync = \"cloud\"").unwrap();
+        assert!(config.validate().is_err());
+
+        let config: Config = toml::from_str(
+            r#"
+[presets]
+bad = { project = "Private_Project" }
+"#,
+        )
+        .unwrap();
+        assert!(config.validate().is_err());
     }
 }

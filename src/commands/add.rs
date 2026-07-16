@@ -9,7 +9,8 @@ pub fn run(config: &Config, line: &str) -> Result<(), String> {
         return Err("cannot add an open interval (no end time)".into());
     }
 
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
+    let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let path = datafile::week_filepath(&data_dir, iv.date);
     datafile::append_interval(&path, &iv)?;
 

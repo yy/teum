@@ -17,7 +17,7 @@ pub fn run(
     html: Option<Option<String>>,
     open: bool,
 ) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
     let today = Local::now().naive_local().date();
 
     let (start, end, label) = if period_str == "all" {
@@ -55,15 +55,14 @@ pub fn run(
     // a bare `--open` falls back to the default report path.
     let target: Option<std::path::PathBuf> = match html {
         Some(Some(p)) => Some(std::path::PathBuf::from(p)),
-        Some(None) => Some(config.report_path()),
-        None if open => Some(config.report_path()),
+        Some(None) => Some(config.report_path()?),
+        None if open => Some(config.report_path()?),
         None => None,
     };
 
     if let Some(path) = target {
         let html = report::html_report(&weeks, &label);
-        std::fs::write(&path, html)
-            .map_err(|e| format!("failed to write {}: {e}", path.display()))?;
+        crate::fsutil::atomic_write(&path, html.as_bytes())?;
         println!("\nwrote {}", path.display());
         if open {
             open_in_browser(&path)?;
@@ -104,16 +103,22 @@ fn parse_week_filename(name: &str) -> Option<NaiveDate> {
 }
 
 fn open_in_browser(path: &std::path::Path) -> Result<(), String> {
-    let opener = if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    std::process::Command::new(opener)
+    #[cfg(target_os = "macos")]
+    let status = std::process::Command::new("open").arg(path).status();
+    #[cfg(target_os = "windows")]
+    let status = std::process::Command::new("cmd")
+        .args(["/C", "start", ""])
         .arg(path)
-        .status()
-        .map_err(|e| format!("failed to open {}: {e}", path.display()))?;
-    Ok(())
+        .status();
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let status = std::process::Command::new("xdg-open").arg(path).status();
+
+    let status = status.map_err(|e| format!("failed to open {}: {e}", path.display()))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("browser opener exited with {status}"))
+    }
 }
 
 #[cfg(test)]

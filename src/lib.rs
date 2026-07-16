@@ -2,6 +2,7 @@ pub mod commands;
 pub mod config;
 pub mod datafile;
 pub mod format;
+mod fsutil;
 pub mod interval;
 pub mod parse;
 pub mod period;

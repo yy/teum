@@ -20,8 +20,8 @@ If a timer is already running, it is automatically stopped before the new one st
 
 ```bash
 teum start -p build "prototype"                # preset
-teum start @focus #planning roadmap            # explicit
-teum start @focus #build '!4' prototype        # with energy
+teum start '@focus' '#planning' roadmap            # explicit
+teum start '@focus' '#build' '!4' prototype        # with energy
 teum start -p meet --at 14:00 "weekly sync"    # override time
 ```
 
@@ -56,7 +56,7 @@ teum stop --at 17:00 -e 4    # retroactive stop with energy
 Show what's currently running, or the last completed entry if nothing is active.
 
 ```
-teum status
+teum status [--json]
 ```
 
 **Output when tracking:**
@@ -74,11 +74,15 @@ No active tracking.
 Last:     14:30 - 15:00 | @support #meeting
 ```
 
+`--json` returns the same state in a machine-readable form, with a live
+`elapsed_seconds` value when tracking.
+
 ---
 
 ## teum resume
 
-Start a new timer with the same project, tags, energy, and description as the last completed entry.
+Start a new timer with the same project, tags, and description as the last
+completed entry. Energy is session-specific and is cleared for the new timer.
 
 ```
 teum resume [OPTIONS]
@@ -155,6 +159,22 @@ Energy averages are shown only when at least one entry in the period has an ener
 
 ---
 
+## teum report
+
+Aggregate entries into weekly category buckets and optionally write a
+self-contained HTML report.
+
+```
+teum report [PERIOD] [--html [PATH]] [--open]
+```
+
+**Period:** `all` (default), `week`, `last-week`, `month`, or `year`
+
+`--html` writes to `~/.config/teum/report.html` unless a path is supplied.
+`--open` implies `--html` and opens the result in the platform browser.
+
+---
+
 ## teum edit
 
 Open a data file in your `$EDITOR`.
@@ -182,6 +202,19 @@ The line must be a complete interval with an end time (no open intervals).
 ```bash
 teum add "2030-01-07 09:00 - 10:30 | @focus #build !4 | prototype"
 ```
+
+---
+
+## teum fill
+
+Fill today's gap from the last completed interval through now. `--continue`
+leaves the new interval running; `--preset` supplies its project and tags.
+
+## teum inject
+
+Insert a recent interval ending now, trimming an overlapping previous entry.
+Durations use forms such as `30m`, `1h`, or `1h30m`; injections cannot cross
+midnight. `--continue` leaves the inserted interval running.
 
 ---
 

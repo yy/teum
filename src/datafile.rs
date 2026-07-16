@@ -1,21 +1,41 @@
 use chrono::{Datelike, IsoWeek, NaiveDate};
 use fs2::FileExt;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::interval::Interval;
 
 /// Acquire an exclusive lock on a lockfile adjacent to the given path.
 /// The lock is released when the returned File is dropped.
-fn lock_file(path: &Path) -> Result<std::fs::File, String> {
+fn open_lock(path: &Path) -> Result<std::fs::File, String> {
     let lock_path = path.with_extension("lock");
-    let lock = std::fs::OpenOptions::new()
+    std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
         .open(&lock_path)
-        .map_err(|e| format!("failed to open lock file: {e}"))?;
+        .map_err(|e| format!("failed to open lock file: {e}"))
+}
+
+fn lock_file(path: &Path) -> Result<std::fs::File, String> {
+    let lock = open_lock(path)?;
     lock.lock_exclusive()
         .map_err(|e| format!("failed to acquire lock: {e}"))?;
+    Ok(lock)
+}
+
+/// Serialize command-level mutations that may inspect or touch multiple week
+/// files. Per-file locks protect bytes; this lock protects invariants such as
+/// "at most one open timer" across the whole data directory.
+pub(crate) fn lock_data_dir(data_dir: &Path) -> Result<std::fs::File, String> {
+    std::fs::create_dir_all(data_dir)
+        .map_err(|e| format!("failed to create data directory: {e}"))?;
+    lock_file(&data_dir.join(".teum-operation"))
+}
+
+fn read_lock(path: &Path) -> Result<std::fs::File, String> {
+    let lock = open_lock(path)?;
+    FileExt::lock_shared(&lock).map_err(|e| format!("failed to acquire read lock: {e}"))?;
     Ok(lock)
 }
 
@@ -32,6 +52,7 @@ pub fn read_intervals(path: &Path) -> Result<Vec<Interval>, String> {
     if !path.exists() {
         return Ok(Vec::new());
     }
+    let _lock = read_lock(path)?;
     let content = std::fs::read_to_string(path)
         .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
 
@@ -51,13 +72,13 @@ pub fn read_intervals(path: &Path) -> Result<Vec<Interval>, String> {
 
 pub fn append_interval(path: &Path, interval: &Interval) -> Result<(), String> {
     use std::fs::OpenOptions;
-    use std::io::Write;
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create data directory: {e}"))?;
     }
 
+    let _lock = lock_file(path)?;
     let line = format!("{}\n", interval.serialize());
     let mut file = OpenOptions::new()
         .create(true)
@@ -66,29 +87,37 @@ pub fn append_interval(path: &Path, interval: &Interval) -> Result<(), String> {
         .map_err(|e| format!("failed to open {}: {e}", path.display()))?;
 
     file.write_all(line.as_bytes())
-        .map_err(|e| format!("failed to write to {}: {e}", path.display()))
+        .map_err(|e| format!("failed to write to {}: {e}", path.display()))?;
+    file.sync_data()
+        .map_err(|e| format!("failed to sync {}: {e}", path.display()))
 }
 
 /// Find the open (running) interval. Returns the interval and its file path.
 pub fn find_open(data_dir: &Path, date: NaiveDate) -> Result<Option<(Interval, PathBuf)>, String> {
-    // Check current week's file first
-    let path = week_filepath(data_dir, date);
-    let intervals = read_intervals(&path)?;
-    if let Some(iv) = intervals.into_iter().rev().find(|iv| iv.is_open()) {
-        return Ok(Some((iv, path)));
-    }
-
-    // Check previous week in case timer was started last week
-    let prev_date = date - chrono::Duration::days(7);
-    let prev_path = week_filepath(data_dir, prev_date);
-    if prev_path.exists() {
-        let intervals = read_intervals(&prev_path)?;
-        if let Some(iv) = intervals.into_iter().rev().find(|iv| iv.is_open()) {
-            return Ok(Some((iv, prev_path)));
+    let mut open = Vec::new();
+    for path in week_filepaths(data_dir)? {
+        for iv in read_intervals(&path)? {
+            if iv.is_open() {
+                if iv.date > date {
+                    return Err(format!(
+                        "open interval starts in the future ({} {} in {})",
+                        iv.date,
+                        iv.start,
+                        path.display()
+                    ));
+                }
+                open.push((iv, path.clone()));
+            }
         }
     }
-
-    Ok(None)
+    open.sort_by_key(|(iv, _)| iv.date.and_time(iv.start));
+    match open.len() {
+        0 => Ok(None),
+        1 => Ok(open.pop()),
+        n => Err(format!(
+            "found {n} open intervals; run 'teum edit' and leave exactly one open timer"
+        )),
+    }
 }
 
 /// Close the open interval by filling in the end time (and optional energy).
@@ -126,8 +155,7 @@ pub fn close_open(
 
     if closed.is_some() {
         let new_content = lines.join("\n") + "\n";
-        std::fs::write(path, new_content)
-            .map_err(|e| format!("failed to write {}: {e}", path.display()))?;
+        crate::fsutil::atomic_write(path, new_content.as_bytes())?;
     }
 
     Ok(closed)
@@ -163,8 +191,7 @@ pub fn remove_open(path: &Path) -> Result<Option<Interval>, String> {
         } else {
             lines.join("\n") + "\n"
         };
-        std::fs::write(path, new_content)
-            .map_err(|e| format!("failed to write {}: {e}", path.display()))?;
+        crate::fsutil::atomic_write(path, new_content.as_bytes())?;
     }
 
     Ok(removed)
@@ -201,8 +228,7 @@ pub fn trim_last_end(path: &Path, new_end: chrono::NaiveTime) -> Result<Option<I
 
     if trimmed.is_some() {
         let new_content = lines.join("\n") + "\n";
-        std::fs::write(path, new_content)
-            .map_err(|e| format!("failed to write {}: {e}", path.display()))?;
+        crate::fsutil::atomic_write(path, new_content.as_bytes())?;
     }
 
     Ok(trimmed)
@@ -242,23 +268,55 @@ pub fn read_range(
 
 /// Find the last completed interval (for resume).
 pub fn find_last_closed(data_dir: &Path, date: NaiveDate) -> Result<Option<Interval>, String> {
-    let path = week_filepath(data_dir, date);
-    let intervals = read_intervals(&path)?;
-    if let Some(iv) = intervals.into_iter().rev().find(|iv| !iv.is_open()) {
-        return Ok(Some(iv));
-    }
-
-    // Check previous week
-    let prev_date = date - chrono::Duration::days(7);
-    let prev_path = week_filepath(data_dir, prev_date);
-    if prev_path.exists() {
-        let intervals = read_intervals(&prev_path)?;
-        if let Some(iv) = intervals.into_iter().rev().find(|iv| !iv.is_open()) {
-            return Ok(Some(iv));
+    let mut last = None;
+    for path in week_filepaths(data_dir)? {
+        for iv in read_intervals(&path)? {
+            if !iv.is_open() && iv.date <= date {
+                let replace = last.as_ref().is_none_or(|current: &Interval| {
+                    iv.date.and_time(iv.start) > current.date.and_time(current.start)
+                });
+                if replace {
+                    last = Some(iv);
+                }
+            }
         }
     }
+    Ok(last)
+}
 
-    Ok(None)
+fn week_filepaths(data_dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let entries = match std::fs::read_dir(data_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("failed to read {}: {e}", data_dir.display())),
+    };
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("failed to read {}: {e}", data_dir.display()))?;
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if is_week_filename(name) {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+fn is_week_filename(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".txt") else {
+        return false;
+    };
+    let Some((year, week)) = stem.split_once("-w") else {
+        return false;
+    };
+    year.parse::<i32>().is_ok()
+        && week.len() == 2
+        && week
+            .parse::<u32>()
+            .is_ok_and(|week| (1..=53).contains(&week))
 }
 
 #[cfg(test)]
@@ -359,5 +417,97 @@ mod tests {
         let intervals = read_intervals(&path).unwrap();
         assert_eq!(intervals.len(), 1);
         assert_eq!(intervals[0].description, "done");
+    }
+
+    #[test]
+    fn finds_open_interval_older_than_previous_week() {
+        let dir = TempDir::new().unwrap();
+        let old_date = NaiveDate::from_ymd_opt(2030, 1, 7).unwrap();
+        let today = NaiveDate::from_ymd_opt(2030, 2, 4).unwrap();
+        let path = week_filepath(dir.path(), old_date);
+        let iv = Interval {
+            date: old_date,
+            start: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            end: None,
+            project: "focus".into(),
+            tags: vec![],
+            energy: None,
+            description: "forgotten".into(),
+        };
+        append_interval(&path, &iv).unwrap();
+
+        let (found, found_path) = find_open(dir.path(), today).unwrap().unwrap();
+        assert_eq!(found, iv);
+        assert_eq!(found_path, path);
+    }
+
+    #[test]
+    fn rejects_multiple_open_intervals() {
+        let dir = TempDir::new().unwrap();
+        let first_date = NaiveDate::from_ymd_opt(2030, 1, 7).unwrap();
+        let second_date = NaiveDate::from_ymd_opt(2030, 1, 14).unwrap();
+        for (date, description) in [(first_date, "first"), (second_date, "second")] {
+            append_interval(
+                &week_filepath(dir.path(), date),
+                &Interval {
+                    date,
+                    start: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+                    end: None,
+                    project: "focus".into(),
+                    tags: vec![],
+                    energy: None,
+                    description: description.into(),
+                },
+            )
+            .unwrap();
+        }
+
+        let err = find_open(dir.path(), second_date).unwrap_err();
+        assert!(err.contains("2 open intervals"));
+    }
+
+    #[test]
+    fn concurrent_append_and_close_preserve_every_entry() {
+        let dir = TempDir::new().unwrap();
+        let date = NaiveDate::from_ymd_opt(2030, 1, 7).unwrap();
+        let path = week_filepath(dir.path(), date);
+        let open = Interval {
+            date,
+            start: NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+            end: None,
+            project: "focus".into(),
+            tags: vec![],
+            energy: None,
+            description: "running".into(),
+        };
+        append_interval(&path, &open).unwrap();
+
+        let append_path = path.clone();
+        let append_thread = std::thread::spawn(move || {
+            for minute in 0..100 {
+                let iv = Interval {
+                    date,
+                    start: NaiveTime::from_hms_opt(10, minute % 60, 0).unwrap(),
+                    end: Some(NaiveTime::from_hms_opt(11, minute % 60, 0).unwrap()),
+                    project: "side".into(),
+                    tags: vec![],
+                    energy: None,
+                    description: format!("entry {minute}"),
+                };
+                append_interval(&append_path, &iv).unwrap();
+            }
+        });
+        let close_path = path.clone();
+        let close_thread = std::thread::spawn(move || {
+            close_open(&close_path, NaiveTime::from_hms_opt(9, 0, 0).unwrap(), None)
+                .unwrap()
+                .unwrap();
+        });
+        append_thread.join().unwrap();
+        close_thread.join().unwrap();
+
+        let intervals = read_intervals(&path).unwrap();
+        assert_eq!(intervals.len(), 101);
+        assert!(intervals.iter().all(|iv| !iv.is_open()));
     }
 }

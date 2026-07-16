@@ -4,7 +4,8 @@ use crate::config::Config;
 use crate::datafile;
 
 pub fn run(config: &Config, target: &str) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
+    let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let today = Local::now().naive_local().date();
 
     let path = if target == "current" {

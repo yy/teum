@@ -14,18 +14,18 @@ pub fn run(
 ) -> Result<(), String> {
     // Bare `teum start`: show available presets instead of starting anything
     if preset.is_none() && args.is_empty() {
-        print_presets(config);
-        return Ok(());
+        return print_presets(config);
     }
 
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
+    let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let now = Local::now().naive_local();
     let date = now.date();
     let time = parse_time_or(at, now.time())?;
 
     // Auto-stop if something is running
     if let Some((open, path)) = datafile::find_open(&data_dir, date)? {
-        state::warn_if_stale(&open, date);
+        super::validate_close_time(&open, date, time)?;
         datafile::close_open(&path, time, None)?;
         eprintln!("(auto-stopped previous timer)");
     }
@@ -33,7 +33,7 @@ pub fn run(
     // Resolve project, tags, energy from preset or args
     let (project, tags, energy, description) = if let Some(preset_name) = preset {
         let p = config.resolve_preset(preset_name)?;
-        let (energy, desc) = parse_energy_and_desc(args);
+        let (energy, desc) = parse_energy_and_desc(args)?;
         (p.project.clone(), p.tags.clone(), energy, desc)
     } else {
         parse_start_args(args)?
@@ -67,16 +67,16 @@ pub fn run(
     Ok(())
 }
 
-fn print_presets(config: &Config) {
+fn print_presets(config: &Config) -> Result<(), String> {
     println!("usage: teum start @project [#tags] [description]");
     println!("       teum start -p <preset> [description]");
     if config.presets.is_empty() {
         println!();
         println!(
             "No presets configured. Add some to {}",
-            crate::config::config_path().display()
+            crate::config::config_path()?.display()
         );
-        return;
+        return Ok(());
     }
     println!();
     println!("Presets:");
@@ -91,4 +91,5 @@ fn print_presets(config: &Config) {
         }
         println!("  {name:<width$}  {meta}");
     }
+    Ok(())
 }

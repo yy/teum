@@ -2,13 +2,16 @@
 name = "teum"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
 description = "Minimal CLI time tracker"
 license = "MIT"
+readme = "README.md"
 repository = "https://github.com/yy/teum"
 homepage = "https://github.com/yy/teum"
 authors = ["YY Ahn"]
 keywords = ["time-tracking", "cli", "productivity"]
 categories = ["command-line-utilities"]
+include = ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "CHANGELOG.md", "SECURITY.md", "src/**/*.rs", "tests/**/*.rs", "docs/**/*.md"]
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
@@ -17,7 +20,5 @@ dirs = "6"
 fs2 = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
-
-[dev-dependencies]
 tempfile = "3"
+toml = "0.8"

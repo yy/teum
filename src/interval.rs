@@ -38,6 +38,19 @@ impl Interval {
         }
     }
 
+    /// Return a duration suitable for reports generated on `today`.
+    ///
+    /// Closed intervals always have a stable duration. An open interval is
+    /// counted only on its start date; older open entries are stale data and
+    /// must not be extrapolated from the current clock time.
+    pub fn report_duration(&self, today: NaiveDate, now: NaiveTime) -> Option<Duration> {
+        match self.duration() {
+            Some(duration) => Some(duration),
+            None if self.date == today => Some(self.duration_until(now)),
+            None => None,
+        }
+    }
+
     pub fn parse(line: &str) -> Result<Interval, String> {
         let line = line.trim();
         if line.is_empty() {
@@ -157,19 +170,18 @@ fn parse_meta_segment(s: &str) -> Result<(String, Vec<String>, Option<u8>), Stri
 
     for token in s.split_whitespace() {
         if let Some(p) = token.strip_prefix('@') {
-            if p.is_empty() {
-                return Err("empty project name (use @name)".into());
-            }
+            validate_name(p, "project")?;
             if project.is_some() {
                 return Err("multiple @projects not allowed".into());
             }
             project = Some(p.to_string());
         } else if let Some(t) = token.strip_prefix('#') {
-            if t.is_empty() {
-                return Err("empty tag (use #name)".into());
-            }
+            validate_name(t, "tag")?;
             tags.push(t.to_string());
         } else if let Some(e) = token.strip_prefix('!') {
+            if energy.is_some() {
+                return Err("multiple energy levels not allowed".into());
+            }
             let level: u8 = e
                 .parse()
                 .map_err(|_| format!("invalid energy level '!{e}' (use 1-5)"))?;
@@ -184,6 +196,21 @@ fn parse_meta_segment(s: &str) -> Result<(String, Vec<String>, Option<u8>), Stri
 
     let project = project.ok_or("missing @project in metadata")?;
     Ok((project, tags, energy))
+}
+
+pub fn validate_name(name: &str, kind: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err(format!("empty {kind} name"));
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Err(format!(
+            "invalid {kind} name '{name}' (use lowercase letters, numbers, and hyphens)"
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -314,6 +341,26 @@ mod tests {
         assert!(Interval::parse(line).is_err());
         let line = "2030-01-07 09:00 - 10:30 | @work !6 | bad";
         assert!(Interval::parse(line).is_err());
+    }
+
+    #[test]
+    fn reject_duplicate_energy() {
+        let line = "2030-01-07 09:00 - 10:30 | @work !3 !4 | bad";
+        assert!(Interval::parse(line).is_err());
+    }
+
+    #[test]
+    fn reject_invalid_names() {
+        assert!(Interval::parse("2030-01-07 09:00 - 10:00 | @Focus | bad").is_err());
+        assert!(Interval::parse("2030-01-07 09:00 - 10:00 | @work #code_review | bad").is_err());
+    }
+
+    #[test]
+    fn stale_open_interval_has_no_report_duration() {
+        let iv = Interval::parse("2030-01-07 09:00 -       | @work | stale").unwrap();
+        let today = NaiveDate::from_ymd_opt(2030, 1, 8).unwrap();
+        let now = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
+        assert_eq!(iv.report_duration(today, now), None);
     }
 
     #[test]

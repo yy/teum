@@ -13,7 +13,8 @@ pub fn run(
     cont: bool,
     args: &[String],
 ) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
+    let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let now = Local::now().naive_local();
     let date = now.date();
     let now_time = truncate_to_minutes(now.time());
@@ -48,7 +49,7 @@ pub fn run(
     // Resolve project, tags, energy, description
     let (project, tags, energy, description) = if let Some(preset_name) = preset {
         let p = config.resolve_preset(preset_name)?;
-        let (energy, desc) = parse_energy_and_desc(args);
+        let (energy, desc) = parse_energy_and_desc(args)?;
         (p.project.clone(), p.tags.clone(), energy, desc)
     } else {
         parse_start_args(args)?

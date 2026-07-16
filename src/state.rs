@@ -1,9 +1,9 @@
 //! Machine-readable runtime state (`current.json`).
 //!
 //! teum is a headless CLI: the only signal that a timer is running is a line
-//! with no end time buried in a weekly text file. That invisibility is how a
-//! timer once stayed open for five days unnoticed. This module mirrors the
-//! running timer into a small JSON file that external tools — notably the
+//! with no end time buried in a weekly text file. An unnoticed timer can
+//! therefore remain open indefinitely. This module mirrors the running timer
+//! into a small JSON file that external tools — notably the
 //! `dial` desk timer — can watch to surface a live, glanceable indicator.
 //!
 //! The file stores *facts* (what is running, since when), not a stale elapsed
@@ -87,13 +87,12 @@ pub fn write(config: &Config, interval: Option<&Interval>) -> Result<(), String>
         Some(iv) => State::from_interval(iv),
         None => State::idle(),
     };
-    let path = config.state_path();
+    let path = config.state_path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create state directory: {e}"))?;
     }
-    std::fs::write(&path, state.to_json() + "\n")
-        .map_err(|e| format!("failed to write {}: {e}", path.display()))
+    crate::fsutil::atomic_write(&path, (state.to_json() + "\n").as_bytes())
 }
 
 /// Downgrade a state-write error to a stderr warning. State mirroring is a
@@ -101,21 +100,6 @@ pub fn write(config: &Config, interval: Option<&Interval>) -> Result<(), String>
 pub fn warn_on_err(result: Result<(), String>) {
     if let Err(e) = result {
         eprintln!("warning: could not update state file: {e}");
-    }
-}
-
-/// Warn when an open interval predating `today` is about to be implicitly
-/// closed or replaced (auto-stop on `start`/`resume`/`inject`). Closing a
-/// days-old timer at today's clock time yields a bogus end time, so flag it.
-pub fn warn_if_stale(iv: &Interval, today: chrono::NaiveDate) {
-    if iv.date < today {
-        let days = (today - iv.date).num_days();
-        let plural = if days == 1 { "" } else { "s" };
-        eprintln!(
-            "⚠  auto-stopping a timer started {days} day{plural} ago ({}) — \
-             its end time is likely wrong; run `teum edit` to fix.",
-            iv.date.format("%Y-%m-%d")
-        );
     }
 }
 

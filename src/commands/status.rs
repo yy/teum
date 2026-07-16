@@ -6,7 +6,7 @@ use crate::format;
 use crate::state::{self, State};
 
 pub fn run(config: &Config, json: bool) -> Result<(), String> {
-    let data_dir = config.data_dir();
+    let data_dir = config.data_dir()?;
     let now = Local::now().naive_local();
     let date = now.date();
 
