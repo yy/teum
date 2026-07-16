@@ -17,6 +17,16 @@ pub fn run(
         return print_presets(config);
     }
 
+    // Validate the replacement before mutating a running timer. A typo in the
+    // new project, tag, energy, or preset must leave the current timer intact.
+    let (project, tags, energy, description) = if let Some(preset_name) = preset {
+        let p = config.resolve_preset(preset_name)?;
+        let (energy, desc) = parse_energy_and_desc(args)?;
+        (p.project.clone(), p.tags.clone(), energy, desc)
+    } else {
+        parse_start_args(args)?
+    };
+
     let data_dir = config.data_dir()?;
     let _operation_lock = datafile::lock_data_dir(&data_dir)?;
     let now = Local::now().naive_local();
@@ -29,15 +39,6 @@ pub fn run(
         datafile::close_open(&path, time, None)?;
         eprintln!("(auto-stopped previous timer)");
     }
-
-    // Resolve project, tags, energy from preset or args
-    let (project, tags, energy, description) = if let Some(preset_name) = preset {
-        let p = config.resolve_preset(preset_name)?;
-        let (energy, desc) = parse_energy_and_desc(args)?;
-        (p.project.clone(), p.tags.clone(), energy, desc)
-    } else {
-        parse_start_args(args)?
-    };
 
     let interval = Interval {
         date,

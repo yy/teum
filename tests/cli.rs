@@ -99,6 +99,20 @@ fn same_day_backwards_stop_is_rejected_without_closing_timer() {
 }
 
 #[test]
+fn invalid_start_does_not_stop_running_timer() {
+    let sandbox = Sandbox::new("");
+    assert_success(&sandbox.run(&["start", "--at", "09:00", "@focus", "keep-running"]));
+
+    let output = sandbox.run(&["start", "--at", "10:00", "@Focus", "typo"]);
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid project name"));
+    let status = sandbox.run(&["status"]);
+    assert_success(&status);
+    assert!(String::from_utf8_lossy(&status.stdout).contains("Tracking: @focus"));
+}
+
+#[test]
 fn concurrent_starts_preserve_single_open_timer_invariant() {
     let sandbox = Sandbox::new("");
     let outputs = std::thread::scope(|scope| {
