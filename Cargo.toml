@@ -1,0 +1,23 @@
+[package]
+name = "teum"
+version = "0.1.0"
+edition = "2024"
+description = "Minimal CLI time tracker"
+license = "MIT"
+repository = "https://github.com/yy/teum"
+homepage = "https://github.com/yy/teum"
+authors = ["YY Ahn"]
+keywords = ["time-tracking", "cli", "productivity"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+fs2 = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
