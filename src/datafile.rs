@@ -305,14 +305,15 @@ fn week_filepaths(data_dir: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(paths)
 }
 
-fn is_week_filename(name: &str) -> bool {
+pub(crate) fn is_week_filename(name: &str) -> bool {
     let Some(stem) = name.strip_suffix(".txt") else {
         return false;
     };
     let Some((year, week)) = stem.split_once("-w") else {
         return false;
     };
-    year.parse::<i32>().is_ok()
+    year.len() == 4
+        && year.bytes().all(|byte| byte.is_ascii_digit())
         && week.len() == 2
         && week
             .parse::<u32>()

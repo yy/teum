@@ -113,6 +113,22 @@ fn invalid_start_does_not_stop_running_timer() {
 }
 
 #[test]
+fn edit_rejects_week_files_that_data_scans_ignore() {
+    let sandbox = Sandbox::new("");
+    let editor = std::env::current_exe().unwrap();
+
+    let output = sandbox
+        .command()
+        .env("EDITOR", editor)
+        .args(["edit", "2030-w99"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid target"));
+}
+
+#[test]
 fn concurrent_starts_preserve_single_open_timer_invariant() {
     let sandbox = Sandbox::new("");
     let outputs = std::thread::scope(|scope| {
