@@ -124,9 +124,12 @@ fn parse_time_segment(s: &str) -> Result<(NaiveDate, NaiveTime, Option<NaiveTime
     // Expected: "YYYY-MM-DD HH:MM - HH:MM" or "YYYY-MM-DD HH:MM -" (open)
     let parts: Vec<&str> = s.splitn(2, " - ").collect();
     if parts.len() < 2 {
-        // Try without end time: "YYYY-MM-DD HH:MM -"
-        let s_trimmed = s.trim_end_matches('-').trim();
-        return parse_start_only(s_trimmed);
+        // Trimming the time segment removes the padding after an open
+        // interval's dash, so accept a trailing " -" but not a missing dash.
+        let start_part = s.strip_suffix(" -").ok_or_else(|| {
+            format!("expected 'YYYY-MM-DD HH:MM - HH:MM' or an open interval ending in '-': {s}")
+        })?;
+        return parse_start_only(start_part.trim());
     }
 
     let start_part = parts[0].trim();
@@ -237,6 +240,12 @@ mod tests {
         assert_eq!(iv.project, "work");
         assert_eq!(iv.tags, vec!["coding"]);
         assert_eq!(iv.description, "parser refactor");
+    }
+
+    #[test]
+    fn reject_open_interval_without_dash() {
+        let line = "2030-01-07 15:15 | @work #coding | missing separator";
+        assert!(Interval::parse(line).is_err());
     }
 
     #[test]
