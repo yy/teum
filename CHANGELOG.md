@@ -5,6 +5,15 @@ All notable changes to teum are documented here. The project follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-17
+
+### Fixed
+
+- Keep the active timer running when replacement `teum start` arguments are
+  invalid.
+- Reject interval lines that omit the `-` time separator instead of silently
+  treating them as open timers.
+
 ## [0.1.0] - 2026-07-16
 
 Initial public release.
@@ -24,5 +33,6 @@ Initial public release.
 - Exclude stale open timers from log and summary totals.
 - Enforce the documented project, tag, energy, and injection-duration syntax.
 
-[Unreleased]: https://github.com/yy/teum/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/yy/teum/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/yy/teum/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/yy/teum/releases/tag/v0.1.0

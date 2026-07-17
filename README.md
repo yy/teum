@@ -7,7 +7,7 @@ teum stores time entries as plain text files. You can read them with `cat`, sear
 ## Quick start
 
 ```bash
-cargo install --git https://github.com/yy/teum --tag v0.1.0
+cargo install --git https://github.com/yy/teum --tag v0.1.1
 teum init
 ```
 
