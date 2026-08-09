@@ -13,7 +13,7 @@ pub fn run(config: &Config) -> Result<(), String> {
     let (_open, path) = datafile::find_open(&data_dir, date)?.ok_or("nothing is running")?;
 
     let removed = datafile::remove_open(&path)?.ok_or("failed to remove interval")?;
-    state::warn_on_err(state::write(config, None));
+    state::warn_on_err(state::write(config, None, None));
 
     let mut meta = format!("@{}", removed.project);
     for tag in &removed.tags {

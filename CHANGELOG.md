@@ -5,6 +5,13 @@ All notable changes to teum are documented here. The project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Record the true start second in `current.json`, so a live readout counts from
+  zero instead of from however far into the minute the timer began. The weekly
+  log stays minute-resolution; `teum status` now carries the mirrored seconds
+  forward instead of rounding them away on every reconcile.
+
 ## [0.1.1] - 2026-07-17
 
 ### Fixed

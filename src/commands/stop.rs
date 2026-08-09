@@ -22,7 +22,7 @@ pub fn run(config: &Config, at: Option<&str>, energy: Option<u8>) -> Result<(), 
     super::validate_close_time(&open, date, time)?;
 
     let closed = datafile::close_open(&path, time, energy)?.ok_or("failed to close interval")?;
-    state::warn_on_err(state::write(config, None));
+    state::warn_on_err(state::write(config, None, None));
 
     // Note if the timer crossed midnight
     if closed.date < date {

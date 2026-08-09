@@ -35,7 +35,12 @@ pub fn run(config: &Config, at: Option<&str>) -> Result<(), String> {
 
     let path = datafile::week_filepath(&data_dir, date);
     datafile::append_interval(&path, &interval)?;
-    state::warn_on_err(state::write(config, Some(&interval)));
+    // Same as `start`: the mirror keeps the second, the ledger keeps the minute.
+    state::warn_on_err(state::write(
+        config,
+        Some(&interval),
+        at.is_none().then_some(now),
+    ));
 
     let mut meta = format!("@{}", interval.project);
     for tag in &interval.tags {

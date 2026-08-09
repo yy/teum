@@ -13,13 +13,24 @@ pub fn run(config: &Config, json: bool) -> Result<(), String> {
     let open = datafile::find_open(&data_dir, date)?;
 
     // Reconcile the runtime state file with reality on every status call, so it
-    // self-heals if a crash or manual edit ever left it out of sync.
-    state::warn_on_err(state::write(config, open.as_ref().map(|(iv, _)| iv)));
+    // self-heals if a crash or manual edit ever left it out of sync. Resolve the
+    // start once and hand it to the write, so restating the mirror keeps the
+    // seconds the ledger dropped and `--json` agrees with the file.
+    let start_dt = open
+        .as_ref()
+        .map(|(iv, _)| state::resolve_start(config, iv, None));
+    state::warn_on_err(state::write(
+        config,
+        open.as_ref().map(|(iv, _)| iv),
+        start_dt,
+    ));
 
     if json {
-        let out = match &open {
-            Some((iv, _)) => State::from_interval(iv).with_elapsed(iv, now).to_json(),
-            None => State::idle().to_json(),
+        let out = match (&open, start_dt) {
+            (Some((iv, _)), Some(start_dt)) => State::running(iv, start_dt)
+                .with_elapsed(start_dt, now)
+                .to_json(),
+            _ => State::idle().to_json(),
         };
         println!("{out}");
         return Ok(());

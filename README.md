@@ -158,11 +158,18 @@ Running:
   "project": "focus",
   "tags": ["build"],
   "description": "prototype",
-  "start": "2030-01-08T09:00:00"
+  "start": "2030-01-08T09:00:50"
 }
 ```
 
 Idle: `{ "tracking": false }`.
+
+Unlike the weekly log, `start` carries **seconds**. The log is minute-resolution
+by design, but a live readout built from a rounded-down minute would open at
+`0:50` rather than `0:00`, so the mirror keeps the second the timer actually
+began; `teum status` carries it forward when it restates the file. A timer
+started with an explicit `--at HH:MM` has no second to claim and stays on the
+minute.
 
 The file stores **facts, not a stale elapsed count** — consumers compute
 elapsed live from `start`. For a point-in-time query, `teum status --json`
@@ -170,7 +177,7 @@ returns the same shape plus an `elapsed_seconds` snapshot:
 
 ```bash
 $ teum status --json
-{ "tracking": true, ..., "start": "2030-01-08T09:00:00", "elapsed_seconds": 5400 }
+{ "tracking": true, ..., "start": "2030-01-08T09:00:50", "elapsed_seconds": 5400 }
 ```
 
 Elapsed is computed from the full start datetime. A timer left open across days reports the full duration, and `teum status` prints a warning when the start predates today.

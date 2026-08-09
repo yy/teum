@@ -70,6 +70,7 @@ pub fn run(
     state::warn_on_err(state::write(
         config,
         if cont { Some(&interval) } else { None },
+        None,
     ));
 
     // Display

@@ -52,7 +52,11 @@ pub fn run(
 
     let path = datafile::week_filepath(&data_dir, date);
     datafile::append_interval(&path, &interval)?;
-    state::warn_on_err(state::write(config, Some(&interval)));
+    // The ledger holds `time` (minute-floored); the runtime mirror can hold the
+    // second we actually started, so live readouts count from zero. An explicit
+    // `--at` is a minute the user chose — no seconds to claim.
+    let stamped = at.is_none().then_some(now);
+    state::warn_on_err(state::write(config, Some(&interval), stamped));
 
     // Display
     let mut meta = format!("@{}", interval.project);

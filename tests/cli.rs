@@ -235,3 +235,46 @@ fn first_sync_pushes_and_sets_upstream() {
         format!("origin/{branch}")
     );
 }
+
+#[test]
+fn running_state_keeps_seconds_the_ledger_rounds_away() {
+    let sandbox = Sandbox::new("");
+    assert_success(&sandbox.run(&["start", "@focus", "prototype"]));
+
+    let state_path = sandbox.config_home.join("teum").join("current.json");
+    let started = start_field(&state_path);
+    let logged: Vec<_> = std::fs::read_dir(&sandbox.data_dir)
+        .unwrap()
+        .map(|e| std::fs::read_to_string(e.unwrap().path()).unwrap())
+        .collect();
+    // The permanent record stays minute-resolution...
+    assert!(
+        logged
+            .iter()
+            .any(|line| line.contains(&format!(" {} -       |", &started[11..16]))),
+        "ledger should log HH:MM, got {logged:?}"
+    );
+    // ...while the mirror keeps the second we actually started. Restating it
+    // from the ledger — what `teum status` does, and what dial triggers on every
+    // panel open — must not round that back down. Plant a known second so the
+    // assertion holds whatever second the test happens to run on.
+    let planted = format!("{}37", &started[..17]);
+    let text = std::fs::read_to_string(&state_path).unwrap();
+    std::fs::write(&state_path, text.replace(&started, &planted)).unwrap();
+    assert_success(&sandbox.run(&["status"]));
+    assert_eq!(start_field(&state_path), planted);
+
+    // `status --json` reports elapsed against that same start, not the minute.
+    let json = sandbox.run(&["status", "--json"]);
+    assert_success(&json);
+    let value: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&json.stdout)).unwrap();
+    assert_eq!(value["start"].as_str().unwrap(), planted);
+}
+
+/// The `start` string inside `current.json`, e.g. `2030-01-08T09:00:50`.
+fn start_field(path: &Path) -> String {
+    let text = std::fs::read_to_string(path).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    value["start"].as_str().unwrap().to_string()
+}
