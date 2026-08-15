@@ -6,7 +6,7 @@
 //!   - Support   = projects in the `support` group
 //!   - Side      = projects in the `side` group
 //!   - Excluded  = projects omitted from totals
-//!   - Highlight = any non-excluded interval tagged `#highlight`
+//!   - Highlight = non-excluded intervals tagged with a `highlight_tags` tag
 //!   - Priority  = Focus or Highlight, counted once
 //!   - Total     = every non-excluded interval
 //!
@@ -105,6 +105,7 @@ pub fn aggregate(
     let is_support = |p: &str| support_set.iter().any(|c| c == p);
     let is_side = |p: &str| side_set.iter().any(|c| c == p);
     let is_excluded = |p: &str| excluded_set.iter().any(|c| c == p);
+    let highlight_tags = config.highlight_tags();
 
     let mut weeks: BTreeMap<(i32, u32), WeeklyStats> = BTreeMap::new();
 
@@ -126,7 +127,7 @@ pub fn aggregate(
 
         let p = iv.project.as_str();
         let excluded = is_excluded(p);
-        let highlight = iv.tags.iter().any(|t| t == "highlight");
+        let highlight = iv.tags.iter().any(|t| highlight_tags.contains(t));
 
         if !excluded {
             entry.total += m;
@@ -143,7 +144,7 @@ pub fn aggregate(
         if !excluded && highlight {
             entry.highlight += m;
         }
-        // Priority is a union, so an interval in Focus with #highlight counts once.
+        // Priority is a union, so a highlighted Focus interval counts once.
         if !excluded && (is_focus(p) || highlight) {
             entry.priority += m;
         }
@@ -164,12 +165,12 @@ fn hm(minutes: i64) -> String {
 pub fn text_table(weeks: &[WeeklyStats]) -> String {
     let mut out = String::new();
     out.push_str(&format!(
-        "{:<10} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6}\n",
-        "week", "total", "focus", "support", "side", "hilite", "prior%", "f2s",
+        "{:<10} {:>7} {:>7} {:>7} {:>7} {:>7} {:>9} {:>6}\n",
+        "week", "total", "focus", "support", "side", "hilite", "priority%", "f2s",
     ));
     for w in weeks {
         out.push_str(&format!(
-            "{:<10} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6} {:>+6.2}\n",
+            "{:<10} {:>7} {:>7} {:>7} {:>7} {:>7} {:>9} {:>+6.2}\n",
             format!("{}-w{:02}", w.year, w.week),
             hm(w.total),
             hm(w.focus),
@@ -777,6 +778,24 @@ mod tests {
 
         assert_eq!(weeks[0].total, 60);
         assert_eq!(weeks[0].focus, 60);
+        assert_eq!(weeks[0].priority, 60);
+    }
+
+    #[test]
+    fn configured_highlight_tags_replace_the_default() {
+        let mut config = cfg();
+        config.highlight_tags = Some(vec!["improving".into()]);
+        let today = NaiveDate::from_ymd_opt(2030, 1, 11).unwrap();
+        let now = NaiveTime::from_hms_opt(23, 0, 0).unwrap();
+        let intervals = vec![
+            iv("2030-01-07", 60, "support", &["improving"]),
+            iv("2030-01-07", 30, "support", &["highlight"]),
+        ];
+
+        let weeks = aggregate(&intervals, &config, today, now);
+
+        // `#improving` now counts; the built-in `#highlight` no longer does.
+        assert_eq!(weeks[0].highlight, 60);
         assert_eq!(weeks[0].priority, 60);
     }
 

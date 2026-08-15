@@ -5,6 +5,16 @@ All notable changes to teum are documented here. The project follows
 
 ## [Unreleased]
 
+### Added
+
+- `highlight_tags` config option, so the weekly report's highlight and priority
+  buckets can recognize tags other than `#highlight`.
+
+### Changed
+
+- Widen the weekly table's priority column and label it `priority%` rather than
+  the abbreviated `prior%`, which also realigns the header with its rows.
+
 ### Fixed
 
 - Record the true start second in `current.json`, so a live readout counts from

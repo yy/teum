@@ -12,7 +12,11 @@ pub struct Config {
     pub presets: HashMap<String, Preset>,
     #[serde(default)]
     pub report_groups: HashMap<String, Vec<String>>,
+    pub highlight_tags: Option<Vec<String>>,
 }
+
+/// Tags that mark an interval as highlighted when none are configured.
+const DEFAULT_HIGHLIGHT_TAGS: &[&str] = &["highlight"];
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Preset {
@@ -59,6 +63,18 @@ impl Config {
         Ok(config_dir()?.join("report.html"))
     }
 
+    /// Tags that make an interval count toward the report's highlight and
+    /// priority buckets. Defaults to `#highlight` alone.
+    pub fn highlight_tags(&self) -> Vec<String> {
+        match self.highlight_tags {
+            Some(ref tags) => tags.clone(),
+            None => DEFAULT_HIGHLIGHT_TAGS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        }
+    }
+
     pub fn resolve_preset(&self, name: &str) -> Result<&Preset, String> {
         // Exact match first
         if let Some(preset) = self.presets.get(name) {
@@ -98,6 +114,12 @@ impl Config {
             for tag in &preset.tags {
                 crate::interval::validate_name(tag, "tag")
                     .map_err(|e| format!("preset '{name}': {e}"))?;
+            }
+        }
+        if let Some(ref tags) = self.highlight_tags {
+            for tag in tags {
+                crate::interval::validate_name(tag, "tag")
+                    .map_err(|e| format!("highlight_tags: {e}"))?;
             }
         }
         Ok(())
@@ -145,6 +167,9 @@ pub fn write_default_config(path: &Path) -> Result<(), String> {
 # sync = "none"
 # auto_commit = false
 # auto_push = true
+
+# Tags that count toward the report's highlight and priority buckets.
+# highlight_tags = ["highlight"]
 
 [presets]
 # dev = { project = "work", tags = ["coding"] }
@@ -194,6 +219,22 @@ billable = ["work", "consulting"]
         assert_eq!(config.presets["dev"].project, "work");
         assert_eq!(config.presets["dev"].tags, vec!["coding"]);
         assert_eq!(config.report_groups["billable"], vec!["work", "consulting"]);
+    }
+
+    #[test]
+    fn highlight_tags_default_and_override() {
+        let config: Config = toml::from_str("").unwrap();
+        assert_eq!(config.highlight_tags(), vec!["highlight".to_string()]);
+
+        let config: Config = toml::from_str(r#"highlight_tags = ["deep", "improving"]"#).unwrap();
+        config.validate().unwrap();
+        assert_eq!(
+            config.highlight_tags(),
+            vec!["deep".to_string(), "improving".to_string()]
+        );
+
+        let config: Config = toml::from_str(r#"highlight_tags = ["Bad Tag"]"#).unwrap();
+        assert!(config.validate().is_err());
     }
 
     #[test]

@@ -55,6 +55,18 @@ auto_push = true
 
 Default: `true`
 
+### `highlight_tags`
+
+Tags that make an interval count toward the weekly report's highlight and
+priority buckets. Any interval carrying at least one of these tags is
+highlighted; the tags are matched exactly, so list every variant you use.
+
+```toml
+highlight_tags = ["highlight", "improving"]
+```
+
+Default: `["highlight"]`
+
 ## Presets
 
 Presets map short names to a project and optional tags. They save typing on the most common `teum start` invocations.
@@ -90,7 +102,7 @@ teum start -p build '!4' "prototype"
 
 ## Report groups
 
-Named groups of projects filter `teum summary`. The weekly report also reads four group names: `focus`, `support`, `side`, and `excluded`. Their default project names match the group names, but you can map them to any private project names in your local config. Add `#highlight` to an interval when you want it included in the report's priority measure.
+Named groups of projects filter `teum summary`. The weekly report also reads four group names: `focus`, `support`, `side`, and `excluded`. Their default project names match the group names, but you can map them to any private project names in your local config. Add `#highlight` to an interval when you want it included in the report's priority measure, or set `highlight_tags` to recognize your own tags instead.
 
 ```toml
 [report_groups]
