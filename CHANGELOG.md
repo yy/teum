@@ -7,6 +7,10 @@ All notable changes to teum are documented here. The project follows
 
 ### Added
 
+- `teum doctor`, which scans the week files for forgotten timers, overlapping
+  or misordered entries, misfiled weeks, zero-duration entries, stale or
+  duplicated open timers, and unparseable lines. It only reports, and exits
+  non-zero when it finds something, so it can gate a scheduled check.
 - `highlight_tags` config option, so the weekly report's highlight and priority
   buckets can recognize tags other than `#highlight`.
 

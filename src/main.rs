@@ -111,6 +111,8 @@ enum Command {
     },
     /// Git sync: add, commit, pull, push
     Sync,
+    /// Check the data files for likely mistakes
+    Doctor,
     /// Initialize data directory and config
     Init,
 }
@@ -148,6 +150,7 @@ fn main() {
         } => commands::inject(&config, preset.as_deref(), &duration, cont, &args),
         Command::Add { line } => commands::add(&config, &line.join(" ")),
         Command::Sync => commands::sync(&config),
+        Command::Doctor => commands::doctor(&config),
         Command::Init => commands::init(&config),
     };
 

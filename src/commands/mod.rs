@@ -1,5 +1,6 @@
 mod add;
 mod cancel;
+mod doctor;
 mod edit;
 mod fill;
 mod init;
@@ -15,6 +16,7 @@ mod sync;
 
 pub use add::run as add;
 pub use cancel::run as cancel;
+pub use doctor::run as doctor;
 pub use edit::run as edit;
 pub use fill::run as fill;
 pub use init::run as init;

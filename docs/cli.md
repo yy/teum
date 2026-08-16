@@ -230,6 +230,41 @@ Runs: `git add -A`, `git commit`, `git pull --rebase`, `git push`
 
 ---
 
+## teum doctor
+
+Scan every week file for entries that look like mistakes rather than records.
+Read-only: it reports, it never rewrites. Exits non-zero when it finds
+something, so it can gate a cron job or a shell prompt.
+
+```
+teum doctor
+```
+
+```
+2026-w32.txt
+  2026-08-08 17:18 - 09:58 @civic    overnight run of 16:40 — likely a forgotten timer
+  2026-08-08 23:40 - 00:20 @research overlaps the previous entry by 10:18
+```
+
+Checks:
+
+| Check | What it catches |
+|-------|-----------------|
+| Forgotten timer | A same-day entry of 12h or more, or an overnight one of 6h or more. Short cross-midnight sessions are legal and stay quiet. |
+| Overlap | An entry starting before the previous one ended. Back-to-back entries sharing an instant are fine. |
+| Out of order | An entry recorded after a later one, which breaks `fill` and `inject`. |
+| Wrong week file | An entry whose date belongs to a different ISO week. Reports still count it, but `log` and `edit` will not show it. |
+| Zero duration | An entry that starts and ends in the same minute. |
+| Stale open timer | An unclosed entry dated before today. It contributes nothing to any report. |
+| Extra open timers | More than one timer running at once. |
+| Unreadable line | A line the parser rejects, named with its line number. |
+
+A forgotten timer is the expensive one: it silently inflates a week by hours,
+and nothing else in teum will tell you. Running `doctor` weekly catches it
+while you still remember what you were doing.
+
+---
+
 ## teum init
 
 Create the data directory and a default config file.

@@ -77,6 +77,7 @@ Files are named by ISO week (`YYYY-wWW.txt`) and stored as plain `.txt`. See [do
 | `teum inject <duration>` | Inject a past interval, trimming the previous entry |
 | `teum add "line"` | Add a past entry manually |
 | `teum sync` | Git add, commit, pull, push |
+| `teum doctor` | Check the data files for likely mistakes |
 | `teum init` | Set up data directory and config |
 
 Periods: `today`, `yesterday`, `week`, `last-week`, `month`, `year` (and `all` for `report`)

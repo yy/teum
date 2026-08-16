@@ -284,7 +284,7 @@ pub fn find_last_closed(data_dir: &Path, date: NaiveDate) -> Result<Option<Inter
     Ok(last)
 }
 
-fn week_filepaths(data_dir: &Path) -> Result<Vec<PathBuf>, String> {
+pub fn week_filepaths(data_dir: &Path) -> Result<Vec<PathBuf>, String> {
     let entries = match std::fs::read_dir(data_dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
