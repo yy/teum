@@ -59,7 +59,7 @@ pub fn run(config: &Config, period_str: &str) -> Result<(), String> {
         println!("  {start} - {end_str}  {meta:<30}{desc:<30} {dur_str:>5}{running}");
     }
 
-    println!("  {:>76}", format!("─────"));
+    println!("  {:>76}", "─────");
     println!(
         "  {:>76}",
         format::duration_str(chrono::Duration::minutes(total_minutes))
