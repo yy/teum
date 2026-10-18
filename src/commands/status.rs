@@ -62,7 +62,8 @@ pub fn run(config: &Config, json: bool) -> Result<(), String> {
                 let plural = if days == 1 { "" } else { "s" };
                 eprintln!(
                     "⚠  open timer started {days} day{plural} ago ({}). \
-                     Likely a runaway — `teum stop` or `teum cancel`.",
+                     Likely a runaway — `teum stop --at HH:MM` (when it should \
+                     have stopped) or `teum cancel`.",
                     iv.date.format("%Y-%m-%d")
                 );
             }

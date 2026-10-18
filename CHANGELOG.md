@@ -21,6 +21,15 @@ All notable changes to teum are documented here. The project follows
 
 ### Fixed
 
+- Let `teum stop --at HH:MM` close a timer left running for more than 24
+  hours. The time is now read as its first occurrence at or after the timer's
+  start rather than as a time today, so a forgotten timer can be ended when the
+  work really stopped. Previously every stop was rejected and the week file had
+  to be edited by hand.
+- Ignore a repeated `teum start` of the task that just started, and a
+  `teum resume` of a timer that just started, instead of closing the running
+  timer as a zero-length entry. A double-clicked button in a front end no
+  longer leaves a junk line in the log.
 - Record the true start second in `current.json`, so a live readout counts from
   zero instead of from however far into the minute the timer began. The weekly
   log stays minute-resolution; `teum status` now carries the mirrored seconds

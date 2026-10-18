@@ -99,6 +99,84 @@ fn same_day_backwards_stop_is_rejected_without_closing_timer() {
 }
 
 #[test]
+fn stale_timer_can_be_stopped_at_the_time_it_should_have_ended() {
+    let sandbox = Sandbox::new("");
+    // A timer forgotten three days ago: too old for a plain stop to close.
+    let started = chrono::Local::now().date_naive() - chrono::Duration::days(3);
+    std::fs::create_dir_all(&sandbox.data_dir).unwrap();
+    let week_file = sandbox
+        .data_dir
+        .join(teum::datafile::week_filename(started));
+    std::fs::write(
+        &week_file,
+        format!("{started} 20:37 -       | @focus | forgotten\n"),
+    )
+    .unwrap();
+
+    let plain = sandbox.run(&["stop"]);
+    assert!(!plain.status.success());
+    assert!(String::from_utf8_lossy(&plain.stderr).contains("teum stop --at"));
+
+    let backdated = sandbox.run(&["stop", "--at", "20:47"]);
+    assert_success(&backdated);
+    assert!(String::from_utf8_lossy(&backdated.stdout).contains("20:37 - 20:47 (0:10)"));
+    assert!(String::from_utf8_lossy(&backdated.stderr).contains(&format!("on {started}")));
+    assert_eq!(
+        std::fs::read_to_string(&week_file).unwrap(),
+        format!("{started} 20:37 - 20:47 | @focus | forgotten\n")
+    );
+}
+
+#[test]
+fn repeated_start_keeps_the_running_timer() {
+    let sandbox =
+        Sandbox::new("[presets]\nwrite = { project = \"focus\", tags = [\"writing\"] }\n");
+    assert_success(&sandbox.run(&["start", "--at", "09:00", "-p", "write"]));
+
+    // The same start again, as a double-clicked button sends it.
+    let repeat = sandbox.run(&["start", "--at", "09:00", "-p", "write"]);
+    assert_success(&repeat);
+    assert!(String::from_utf8_lossy(&repeat.stderr).contains("ignored the repeated start"));
+    // So does a resume, which would restart the very timer it closes.
+    let resume = sandbox.run(&["resume", "--at", "09:01"]);
+    assert_success(&resume);
+    assert!(String::from_utf8_lossy(&resume.stderr).contains("ignored the repeated resume"));
+
+    let ledger = ledger_lines(&sandbox);
+    assert_eq!(ledger.len(), 1, "expected one open timer, got {ledger:?}");
+    assert!(ledger[0].contains(" 09:00 -       | @focus #writing |"));
+
+    // A different task, or the same one later on, still replaces it.
+    assert_success(&sandbox.run(&["start", "--at", "09:01", "@focus", "other"]));
+    assert_success(&sandbox.run(&["start", "--at", "09:30", "@focus", "other"]));
+    let ledger = ledger_lines(&sandbox);
+    assert_eq!(ledger.len(), 3, "expected three entries, got {ledger:?}");
+    assert!(ledger[0].contains(" 09:00 - 09:01 | @focus #writing |"));
+    assert!(ledger[1].contains(" 09:01 - 09:30 | @focus | other"));
+    assert!(ledger[2].contains(" 09:30 -       | @focus | other"));
+}
+
+/// Every entry in the sandbox's week files, in file order.
+fn ledger_lines(sandbox: &Sandbox) -> Vec<String> {
+    let mut paths: Vec<_> = std::fs::read_dir(&sandbox.data_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "txt"))
+        .collect();
+    paths.sort();
+    paths
+        .iter()
+        .flat_map(|path| {
+            std::fs::read_to_string(path)
+                .unwrap()
+                .lines()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+#[test]
 fn invalid_start_does_not_stop_running_timer() {
     let sandbox = Sandbox::new("");
     assert_success(&sandbox.run(&["start", "--at", "09:00", "@focus", "keep-running"]));

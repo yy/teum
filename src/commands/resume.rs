@@ -15,6 +15,13 @@ pub fn run(config: &Config, at: Option<&str>) -> Result<(), String> {
 
     // Auto-stop if something is running
     if let Some((open, path)) = datafile::find_open(&data_dir, date)? {
+        // Resuming closes the running timer and restarts that same entry, so
+        // doing it to a timer that only just began (a double-clicked button)
+        // would leave nothing but a zero-length entry. Keep that timer.
+        if super::just_started(&open, date, time) {
+            eprintln!("(already running; ignored the repeated resume)");
+            return Ok(());
+        }
         super::validate_close_time(&open, date, time)?;
         datafile::close_open(&path, time, None)?;
         eprintln!("(auto-stopped previous timer)");

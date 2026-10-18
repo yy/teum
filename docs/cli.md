@@ -15,6 +15,7 @@ teum start [OPTIONS] [ARGS]...
 **Arguments:** `@project #tag !energy description`
 
 If a timer is already running, it is automatically stopped before the new one starts.
+The exception is a repeat of the start that opened the running timer (same project, tags, energy, and description, within two minutes of it), such as a double-clicked button: it is ignored and the timer keeps running, instead of being closed as a zero-length entry.
 
 **Examples:**
 
@@ -41,12 +42,18 @@ teum stop [OPTIONS]
 
 Errors if nothing is running.
 
+An interval must be shorter than 24 hours, so a plain `teum stop` refuses a timer that has been running longer than that.
+`--at` still closes it: the time is read as its first occurrence at or after the timer's start, not as a time today.
+A timer started at 20:37 and forgotten for days ends ten minutes later with `teum stop --at 20:47`.
+When the end lands on an earlier day, `stop` prints a note saying which.
+
 **Examples:**
 
 ```bash
 teum stop                    # stop now
 teum stop -e 3               # stop with energy level
 teum stop --at 17:00 -e 4    # retroactive stop with energy
+teum stop --at 20:47         # close a forgotten timer when the work really ended
 ```
 
 ---
@@ -92,6 +99,7 @@ teum resume [OPTIONS]
 - `-a, --at <HH:MM>` -- override start time
 
 If a timer is running, it is stopped first.
+A timer that started less than two minutes ago is left running instead, since resuming would only restart that same entry.
 
 ---
 

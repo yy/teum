@@ -120,7 +120,7 @@ The core loop is four commands: `start`, `stop`, `status`, `resume`. Everything 
 
 ### Auto-stop
 
-Running `teum start` while a timer is already running will stop the current timer and start the new one. This removes the most common friction point in time tracking: forgetting to stop before starting something new.
+Running `teum start` while a timer is already running will stop the current timer and start the new one. This removes the most common friction point in time tracking: forgetting to stop before starting something new. The one start that does not auto-stop is an exact repeat of the start that opened the running timer, arriving within two minutes of it. That is a command fired twice, not a new session, and stopping the timer would leave a zero-length entry behind.
 
 ### Presets
 

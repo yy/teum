@@ -33,13 +33,6 @@ pub fn run(
     let date = now.date();
     let time = parse_time_or(at, now.time())?;
 
-    // Auto-stop if something is running
-    if let Some((open, path)) = datafile::find_open(&data_dir, date)? {
-        super::validate_close_time(&open, date, time)?;
-        datafile::close_open(&path, time, None)?;
-        eprintln!("(auto-stopped previous timer)");
-    }
-
     let interval = Interval {
         date,
         start: time,
@@ -50,6 +43,20 @@ pub fn run(
         description,
     };
 
+    // Auto-stop if something is running
+    if let Some((open, path)) = datafile::find_open(&data_dir, date)? {
+        // The same start arriving twice (a double-clicked button) would close
+        // the timer it just opened as a zero-length entry. Keep that timer.
+        if same_task(&open, &interval) && super::just_started(&open, date, time) {
+            eprintln!("(already running; ignored the repeated start)");
+            print_tracking(&open);
+            return Ok(());
+        }
+        super::validate_close_time(&open, date, time)?;
+        datafile::close_open(&path, time, None)?;
+        eprintln!("(auto-stopped previous timer)");
+    }
+
     let path = datafile::week_filepath(&data_dir, date);
     datafile::append_interval(&path, &interval)?;
     // The ledger holds `time` (minute-floored); the runtime mirror can hold the
@@ -58,7 +65,19 @@ pub fn run(
     let stamped = at.is_none().then_some(now);
     state::warn_on_err(state::write(config, Some(&interval), stamped));
 
-    // Display
+    print_tracking(&interval);
+
+    Ok(())
+}
+
+fn same_task(a: &Interval, b: &Interval) -> bool {
+    a.project == b.project
+        && a.tags == b.tags
+        && a.energy == b.energy
+        && a.description == b.description
+}
+
+fn print_tracking(interval: &Interval) {
     let mut meta = format!("@{}", interval.project);
     for tag in &interval.tags {
         meta.push_str(&format!(" #{tag}"));
@@ -67,9 +86,7 @@ pub fn run(
     if !interval.description.is_empty() {
         println!("          {}", interval.description);
     }
-    println!("Started:  {}", time.format("%H:%M"));
-
-    Ok(())
+    println!("Started:  {}", interval.start.format("%H:%M"));
 }
 
 fn print_presets(config: &Config) -> Result<(), String> {

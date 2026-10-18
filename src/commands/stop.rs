@@ -19,13 +19,25 @@ pub fn run(config: &Config, at: Option<&str>, energy: Option<u8>) -> Result<(), 
     let time = parse_time_or(at, now.time())?;
 
     let (open, path) = datafile::find_open(&data_dir, date)?.ok_or("nothing is running")?;
-    super::validate_close_time(&open, date, time)?;
+    let end_date = match at {
+        Some(_) => super::stop_at_date(&open, time, date),
+        None => date,
+    };
+    super::validate_close_time(&open, end_date, time)?;
 
     let closed = datafile::close_open(&path, time, energy)?.ok_or("failed to close interval")?;
     state::warn_on_err(state::write(config, None, None));
 
-    // Note if the timer crossed midnight
-    if closed.date < date {
+    // Say which day the end landed on whenever it isn't the obvious one
+    if end_date < date {
+        eprintln!(
+            "note: stopped at {} on {}, not today (started {} on {})",
+            time.format("%H:%M"),
+            end_date.format("%Y-%m-%d"),
+            closed.start.format("%H:%M"),
+            closed.date.format("%Y-%m-%d")
+        );
+    } else if closed.date < date {
         eprintln!(
             "note: timer crossed midnight (started {} on {})",
             closed.start.format("%H:%M"),
