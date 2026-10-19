@@ -414,7 +414,7 @@ pub fn html_report(weeks: &[WeeklyStats], range_label: &str) -> String {
         (w.monday - first).num_days() as f64
     };
     let xmin = 0.0;
-    let xmax = weeks.last().map(&x_of).unwrap_or(1.0);
+    let xmax = weeks.last().map(x_of).unwrap_or(1.0);
     let xt = x_ticks(weeks, &x_of);
 
     // Shared maxima keep related hour charts comparable.
